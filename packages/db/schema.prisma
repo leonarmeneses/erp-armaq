@@ -1,0 +1,182 @@
+// Prisma schema for Catálogo de Clientes y Productos
+// models: Client, Product, enums, and relations
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Client {
+  id          String     @id @default(cuid())
+  code        String     @unique
+  name        String
+  rfc         String     @unique
+  email       String?
+  phone       String?
+  address     Json?
+  creditLimit Float      @default(0)
+  creditDays  Int        @default(0)
+  balance     Float      @default(0)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  // Relaciones
+  quotes      Quote[]
+  salesOrders SaleOrder[]
+  invoices    Invoice[]
+  payments    Payment[] // Relación inversa para Payment
+}
+
+model Product {
+  id            String         @id @default(cuid())
+  code          String         @unique
+  name          String
+  description   String?
+  type          ProductType    @default(PRODUCT)
+  cost          Float          @default(0)
+  price         Float
+  taxRate       Float          @default(0.16)
+  stock         Float          @default(0)
+  unit          String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  // Relaciones
+  invoiceItems    InvoiceItem[]
+  stockMovements  StockMovement[]
+}
+
+enum ProductType {
+  PRODUCT
+  SERVICE
+}
+
+// Placeholder models for relations (to be defined in detail later)
+model Quote {
+  id         String      @id @default(cuid())
+  folio      String      @unique
+  clientId   String
+  client     Client      @relation(fields: [clientId], references: [id])
+  total      Float
+  status     QuoteStatus @default(PENDING)
+  createdAt  DateTime    @default(now())
+  validUntil DateTime
+  items      Json
+  notas      String?     // Notas o comentarios
+  usuario    String?     // Usuario que crea la cotización
+  saleOrders SaleOrder[] // Relación inversa
+}
+
+enum QuoteStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  VENDIDO
+}
+
+model SaleOrder {
+  id        String          @id @default(cuid())
+  folio     String          @unique
+  clientId  String
+  client    Client          @relation(fields: [clientId], references: [id])
+  total     Float
+  status    SaleOrderStatus @default(PENDING_SURTIDO)
+  createdAt DateTime        @default(now())
+  items     Json
+  quoteId   String?
+  quote     Quote?          @relation(fields: [quoteId], references: [id])
+  invoices  Invoice[]       @relation("SaleOrderInvoices") // Relación inversa para Invoice
+}
+
+enum SaleOrderStatus {
+  PENDING_SURTIDO
+  PARTIAL
+  COMPLETED
+}
+
+model Invoice {
+  id            String        @id @default(cuid())
+  folio         String        @unique
+  uuid          String?       @unique
+  clientId      String
+  client        Client        @relation(fields: [clientId], references: [id])
+  subtotal      Float
+  tax           Float
+  total         Float
+  status        InvoiceStatus @default(UNPAID)
+  paymentMethod String
+  createdAt     DateTime      @default(now())
+  items         InvoiceItem[]
+  saleOrderId   String?
+  saleOrder     SaleOrder?    @relation("SaleOrderInvoices", fields: [saleOrderId], references: [id])
+  paymentApplications PaymentApplication[] // Relación inversa para PaymentApplication
+}
+
+model InvoiceItem {
+  id        String  @id @default(cuid())
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id])
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Float
+  price     Float
+  subtotal  Float
+}
+
+enum InvoiceStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+  CANCELED
+}
+
+model StockMovement {
+  id         String        @id @default(cuid())
+  productId  String
+  product    Product      @relation(fields: [productId], references: [id])
+  type       MovementType
+  quantity   Float
+  reason     String?
+  cost       Float
+  createdAt  DateTime     @default(now())
+  createdBy  String?      // Usuario que registró la entrada
+  relatedInvoiceId String?
+  relatedPurchaseId String?
+}
+
+enum MovementType {
+  IN
+  OUT
+  ADJUSTMENT
+}
+
+model Payment {
+  id          String    @id @default(cuid())
+  folio       String    @unique
+  clientId    String
+  client      Client   @relation(fields: [clientId], references: [id])
+  amount      Float
+  paymentDate DateTime
+  createdAt   DateTime  @default(now())
+  appliedTo   PaymentApplication[]
+}
+
+model PaymentApplication {
+  id            String  @id @default(cuid())
+  paymentId     String
+  payment       Payment @relation(fields: [paymentId], references: [id])
+  invoiceId     String
+  invoice       Invoice @relation(fields: [invoiceId], references: [id])
+  amountApplied Float
+}
+
+model User {
+  id       String   @id @default(cuid())
+  name     String   @unique
+  role     String
+  password String
+}

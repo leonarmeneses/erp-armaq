@@ -1,0 +1,70 @@
+# Node
+node_modules/
+.env
+.env.*
+*.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build
+/dist/
+/build/
+/.next/
+/.turbo/
+/.output/
+
+# Vite
+.vite/
+
+# VSCode
+.vscode/
+
+# Prisma
+/prisma/dev.db
+/prisma/dev.db-journal
+/prisma/migrations/
+/prisma/.env
+/packages/db/.env
+/packages/db/prisma/dev.db
+/packages/db/prisma/dev.db-journal
+/packages/db/prisma/migrations/
+
+# TypeScript
+*.tsbuildinfo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Monorepo
+**/node_modules/
+**/dist/
+**/.turbo/
+**/.output/
+
+# Others
+coverage/
+
+# Frontend
+apps/web/frontweb/.next/
+apps/web/frontweb/.turbo/
+apps/web/frontweb/.output/
+apps/web/frontweb/node_modules/
+apps/web/frontweb/dist/
+apps/web/frontweb/.vite/
+
+# API
+packages/api/node_modules/
+packages/api/dist/
+
+# DB
+packages/db/node_modules/
+
+# Ignore lockfiles in subfolders
+**/pnpm-lock.yaml
+**/yarn.lock
+**/package-lock.json
