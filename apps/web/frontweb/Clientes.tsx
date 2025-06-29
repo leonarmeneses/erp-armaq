@@ -113,11 +113,15 @@ export default function Clientes() {
 
   const confirmDelete = async () => {
     try {
-      await fetch(`/api/clients/${deleteCliente.id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/clients/${deleteCliente.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Error en la respuesta del servidor');
+      }
       setDeleteCliente(null);
       fetchClientes();
-    } catch {
-      alert('Error al eliminar cliente');
+    } catch (e: any) {
+      alert('Error al eliminar cliente: ' + (e.message || e));
     }
   };
 
