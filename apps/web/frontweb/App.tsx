@@ -8,21 +8,25 @@ import OrdenDeVenta from './OrdenDeVenta';
 import Facturacion from './Facturacion';
 import Tesoreria from './Tesoreria';
 import Reportes from './Reportes';
+import Usuarios from './Usuarios';
+import RequireAuth from './RequireAuth';
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Login />} />
-        <Route path="/panel" element={<AppPanel />} />
-        <Route path="/clientes" element={<Clientes />} />
-        <Route path="/cotizaciones" element={<Cotizaciones />} />
-        <Route path="/inventarios" element={<Inventarios />} />
-        <Route path="/orden_de_venta" element={<OrdenDeVenta />} />
-        <Route path="/facturacion" element={<Facturacion />} />
-        <Route path="/tesoreria" element={<Tesoreria />} />
-        <Route path="/reportes" element={<Reportes />} />
-        <Route path="*" element={<Navigate to="/" />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/panel" element={<RequireAuth><AppPanel /></RequireAuth>} />
+        <Route path="/clientes" element={<RequireAuth><Clientes /></RequireAuth>} />
+        <Route path="/cotizaciones" element={<RequireAuth><Cotizaciones /></RequireAuth>} />
+        <Route path="/inventarios" element={<RequireAuth><Inventarios /></RequireAuth>} />
+        <Route path="/orden_de_venta" element={<RequireAuth><OrdenDeVenta /></RequireAuth>} />
+        <Route path="/facturacion" element={<RequireAuth><Facturacion /></RequireAuth>} />
+        <Route path="/tesoreria" element={<RequireAuth><Tesoreria /></RequireAuth>} />
+        <Route path="/reportes" element={<RequireAuth><Reportes /></RequireAuth>} />
+        <Route path="/usuarios" element={<RequireAuth><Usuarios /></RequireAuth>} />
+        <Route path="/" element={<Navigate to="/login" />} />
+        <Route path="*" element={<Navigate to="/login" />} />
       </Routes>
     </BrowserRouter>
   );

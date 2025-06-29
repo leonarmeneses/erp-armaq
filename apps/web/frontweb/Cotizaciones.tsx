@@ -112,7 +112,7 @@ export default function Cotizaciones() {
         </tbody>
       </table>
       {showForm && (
-        <NuevaCotizacionForm onSave={saveCotizacion} onCancel={() => setShowForm(false)} />
+        <NuevaCotizacionForm onSave={saveCotizacion} onCancel={() => setShowForm(false)} clientes={clientes} />
       )}
       {showView.open && (
         <VerCotizacionModal cotizacion={showView.cotizacion} onClose={() => setShowView({ open: false })} clientes={clientes} />
@@ -135,7 +135,7 @@ export default function Cotizaciones() {
   );
 }
 
-function NuevaCotizacionForm({ onSave, onCancel }: { onSave: (data: any) => void, onCancel: () => void }) {
+function NuevaCotizacionForm({ onSave, onCancel, clientes }: { onSave: (data: any) => void, onCancel: () => void, clientes: any[] }) {
   const [productos, setProductos] = useState<any[]>([]);
   const [clientId, setClientId] = useState('');
   const [fecha, setFecha] = useState(new Date().toISOString().slice(0,10));
@@ -189,7 +189,9 @@ function NuevaCotizacionForm({ onSave, onCancel }: { onSave: (data: any) => void
           </label>
         </div>
         <div style={{ marginBottom:8 }}>
-          <label>Fecha:<br/><input type="date" value={fecha} onChange={e=>setFecha(e.target.value)} required /></label>
+          <label>Fecha:<br/>
+            <input type="date" value={fecha} readOnly disabled style={{ background:'#eee' }} />
+          </label>
         </div>
         <div style={{ marginBottom:8 }}>
           <label>Usuario:<br/><input value={usuario} readOnly style={{ background:'#eee' }} /></label>
@@ -348,7 +350,9 @@ function EditarCotizacionModal({ cotizacion, onClose, clientes, onSave }: { coti
           </label>
         </div>
         <div style={{ marginBottom:8 }}>
-          <label>Fecha:<br/><input type="date" value={fecha} onChange={e=>setFecha(e.target.value)} required /></label>
+          <label>Fecha:<br/>
+            <input type="date" value={fecha} readOnly disabled style={{ background:'#eee' }} />
+          </label>
         </div>
         <div style={{ marginBottom:8 }}>
           <label>Usuario:<br/><input value={usuario} readOnly style={{ background:'#eee' }} /></label>

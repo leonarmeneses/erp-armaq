@@ -7,5 +7,7 @@ const router = Router();
 router.post('/', productsController.createProduct);
 // Listar productos
 router.get('/', productsController.getProducts);
+// Actualizar producto
+router.put('/:id', productsController.updateProduct);
 
 export default router;

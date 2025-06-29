@@ -3,8 +3,8 @@ import * as invoicesController from './invoices.controller';
 
 const router = Router();
 
-// Crear nueva factura
-router.post('/', invoicesController.createInvoice);
+// Crear nueva factura con archivos
+router.post('/', invoicesController.uploadInvoiceFiles, invoicesController.createInvoice);
 // Listar facturas
 router.get('/', invoicesController.getInvoices);
 // Obtener una factura específica

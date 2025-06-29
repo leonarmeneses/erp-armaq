@@ -6,13 +6,12 @@ function ProductoForm({ initial, onSave, onCancel }: { initial?: any, onSave: (d
   const code = initial?.code || '';
   const [name, setName] = useState(initial?.name || '');
   const [type, setType] = useState(initial?.type || 'PRODUCT');
-  const [cost, setCost] = useState(initial?.cost || 0);
-  const [price, setPrice] = useState(initial?.price || 0);
+  const [price, setPrice] = useState(initial?.price !== undefined ? String(initial.price) : '');
   const [unit, setUnit] = useState(initial?.unit || 'pieza');
   const [description, setDescription] = useState(initial?.description || '');
   return (
     <div style={{ position: 'fixed', top:0, left:0, width:'100vw', height:'100vh', background:'rgba(0,0,0,0.2)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000 }}>
-      <form onSubmit={e => { e.preventDefault(); onSave({ name, type, cost, price, unit, description }); }} style={{ background:'#fff', padding:24, borderRadius:8, minWidth:300 }}>
+      <form onSubmit={e => { e.preventDefault(); onSave({ name, type, price: price === '' ? null : parseFloat(price), unit, description }); }} style={{ background:'#fff', padding:24, borderRadius:8, minWidth:300 }}>
         <h3>{initial ? 'Editar producto' : 'Añadir producto'}</h3>
         {code && (
           <div style={{ marginBottom:8 }}>
@@ -33,10 +32,7 @@ function ProductoForm({ initial, onSave, onCancel }: { initial?: any, onSave: (d
           </label>
         </div>
         <div style={{ marginBottom:8 }}>
-          <label>Costo:<br/><input type="number" value={cost} onChange={e=>setCost(Number(e.target.value))} min={0} step={0.01} required /></label>
-        </div>
-        <div style={{ marginBottom:8 }}>
-          <label>Precio:<br/><input type="number" value={price} onChange={e=>setPrice(Number(e.target.value))} min={0} step={0.01} required /></label>
+          <label>Precio:<br/><input value={price} onChange={e=>setPrice(e.target.value)} required /></label>
         </div>
         <div style={{ marginBottom:8 }}>
           <label>Unidad:<br/><input value={unit} onChange={e=>setUnit(e.target.value)} required /></label>
@@ -66,13 +62,22 @@ function ConfirmDialog({ message, onConfirm, onCancel }: { message: string, onCo
 function EntradaForm({ productos, onSave, onCancel }: { productos: any[], onSave: (data: any) => void, onCancel: () => void }) {
   const [productId, setProductId] = useState(productos[0]?.id || '');
   const [quantity, setQuantity] = useState(1);
-  const [cost, setCost] = useState(0);
-  const [fecha, setFecha] = useState(new Date().toISOString().slice(0,10));
+  const [fecha] = useState(new Date().toISOString().slice(0,10));
   const usuario = localStorage.getItem('usuario') || '';
+  const [tipo, setTipo] = useState<'IN' | 'OUT' | 'ADJUSTMENT'>('IN');
   return (
     <div style={{ position: 'fixed', top:0, left:0, width:'100vw', height:'100vh', background:'rgba(0,0,0,0.2)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000 }}>
-      <form onSubmit={e => { e.preventDefault(); onSave({ productId, quantity, type: 'ADJUSTMENT', cost, createdAt: fecha, createdBy: usuario }); }} style={{ background:'#fff', padding:24, borderRadius:8, minWidth:300 }}>
-        <h3>Entrada de producto</h3>
+      <form onSubmit={e => { e.preventDefault(); onSave({ productId, quantity, type: tipo, createdAt: fecha, createdBy: usuario }); }} style={{ background:'#fff', padding:24, borderRadius:8, minWidth:300 }}>
+        <h3>Movimiento de inventario</h3>
+        <div style={{ marginBottom:8 }}>
+          <label>Tipo de movimiento:<br/>
+            <select value={tipo} onChange={e=>setTipo(e.target.value as any)} required>
+              <option value="IN">Entrada</option>
+              <option value="ADJUSTMENT">Ajuste</option>
+              <option value="OUT">Salida</option>
+            </select>
+          </label>
+        </div>
         <div style={{ marginBottom:8 }}>
           <label>Producto:<br/>
             <select value={productId} onChange={e=>setProductId(e.target.value)} required>
@@ -86,10 +91,9 @@ function EntradaForm({ productos, onSave, onCancel }: { productos: any[], onSave
           <label>Cantidad:<br/><input type="number" value={quantity} onChange={e=>setQuantity(Number(e.target.value))} min={1} required /></label>
         </div>
         <div style={{ marginBottom:8 }}>
-          <label>Costo:<br/><input type="number" value={cost} onChange={e=>setCost(Number(e.target.value))} min={0} step={0.01} required /></label>
-        </div>
-        <div style={{ marginBottom:8 }}>
-          <label>Fecha:<br/><input type="date" value={fecha} onChange={e=>setFecha(e.target.value)} required /></label>
+          <label>Fecha:<br/>
+            <input type="date" value={fecha} readOnly disabled style={{ background:'#eee' }} />
+          </label>
         </div>
         <div style={{ marginBottom:8 }}>
           <label>Usuario:<br/><input value={usuario} readOnly style={{ background:'#eee' }} /></label>
@@ -111,6 +115,15 @@ export default function Inventarios() {
   const [editProducto, setEditProducto] = useState<any>(null);
   const [deleteProducto, setDeleteProducto] = useState<any>(null);
   const [showEntrada, setShowEntrada] = useState(false);
+
+  // Obtener el rol del usuario
+  const rol = (() => {
+    try {
+      const userData = localStorage.getItem('usuario_data');
+      if (userData) return JSON.parse(userData).role;
+    } catch {}
+    return '';
+  })();
 
   const fetchMovimientos = () => {
     setLoading(true);
@@ -155,7 +168,12 @@ export default function Inventarios() {
         });
       }
       if (!res.ok) {
-        const err = await res.json();
+        let err;
+        try {
+          err = await res.json();
+        } catch {
+          err = { error: 'Error en la respuesta del servidor' };
+        }
         throw new Error(err.error || 'Error en la respuesta del servidor');
       }
       setShowForm(false);
@@ -177,14 +195,20 @@ export default function Inventarios() {
   };
   const saveEntrada = async (data: any) => {
     try {
-      const res = await fetch('/api/stockmovements/adjustment', {
+      const res = await fetch('/api/stockmovements', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify(data), // Usar el tipo seleccionado en el formulario
       });
+      let result;
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        result = await res.json();
+      } else {
+        result = { error: 'Respuesta inesperada del servidor' };
+      }
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Error en la respuesta del servidor');
+        throw new Error(result.error || 'Error en la respuesta del servidor');
       }
       setShowEntrada(false);
       alert('Entrada registrada correctamente');
@@ -204,8 +228,12 @@ export default function Inventarios() {
       <h2>Movimientos de Inventario</h2>
       <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
         <div style={{ flex: 1 }}>
-          <button onClick={handleAdd} style={{ marginBottom: 16, marginRight: 8 }}>Añadir producto</button>
-          <button onClick={handleEntrada} style={{ marginBottom: 16 }}>Entrada</button>
+          {rol !== 'VENTAS' && (
+            <>
+              <button onClick={handleAdd} style={{ marginBottom: 16, marginRight: 8 }}>Añadir producto</button>
+              <button onClick={handleEntrada} style={{ marginBottom: 16 }}>Movimiento</button>
+            </>
+          )}
           <h3>Lista de productos</h3>
           <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 24 }}>
             <thead>
@@ -213,7 +241,6 @@ export default function Inventarios() {
                 <th style={{ border: '1px solid #ccc', padding: 8 }}>Código</th>
                 <th style={{ border: '1px solid #ccc', padding: 8 }}>Nombre</th>
                 <th style={{ border: '1px solid #ccc', padding: 8 }}>Tipo</th>
-                <th style={{ border: '1px solid #ccc', padding: 8 }}>Costo</th>
                 <th style={{ border: '1px solid #ccc', padding: 8 }}>Precio</th>
                 <th style={{ border: '1px solid #ccc', padding: 8 }}>Unidad</th>
                 <th style={{ border: '1px solid #ccc', padding: 8 }}>Cantidad</th>
@@ -226,13 +253,13 @@ export default function Inventarios() {
                   <td style={{ border: '1px solid #ccc', padding: 8 }}>{p.code}</td>
                   <td style={{ border: '1px solid #ccc', padding: 8 }}>{p.name}</td>
                   <td style={{ border: '1px solid #ccc', padding: 8 }}>{p.type}</td>
-                  <td style={{ border: '1px solid #ccc', padding: 8 }}>{p.cost}</td>
                   <td style={{ border: '1px solid #ccc', padding: 8 }}>{p.price}</td>
                   <td style={{ border: '1px solid #ccc', padding: 8 }}>{p.unit}</td>
                   <td style={{ border: '1px solid #ccc', padding: 8 }}>{p.stock ?? 0}</td>
                   <td style={{ border: '1px solid #ccc', padding: 8 }}>
-                    <button onClick={() => handleEdit(p)} style={{ marginRight: 8 }}>Editar</button>
-                    <button onClick={() => handleDelete(p)}>Eliminar</button>
+                    {rol !== 'VENTAS' && (
+                      <button onClick={() => handleEdit(p)} style={{ marginRight: 8 }}>Editar</button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -255,9 +282,11 @@ export default function Inventarios() {
             <tbody>
               {movimientos.map(m => (
                 <tr key={m.id}>
-                  <td style={{ border: '1px solid #ccc', padding: 8 }}>{m.id}</td>
+                  <td style={{ border: '1px solid #ccc', padding: 8 }}>{m.folio || m.id}</td>
                   <td style={{ border: '1px solid #ccc', padding: 8 }}>{m.product?.name || m.productId}</td>
-                  <td style={{ border: '1px solid #ccc', padding: 8 }}>{m.type}</td>
+                  <td style={{ border: '1px solid #ccc', padding: 8 }}>
+                    {m.type === 'IN' ? 'Entrada' : m.type === 'OUT' ? 'Salida' : m.type === 'ADJUSTMENT' ? 'Ajuste' : m.type}
+                  </td>
                   <td style={{ border: '1px solid #ccc', padding: 8 }}>{m.quantity}</td>
                   <td style={{ border: '1px solid #ccc', padding: 8 }}>{m.createdAt?.slice(0,10)}</td>
                   <td style={{ border: '1px solid #ccc', padding: 8 }}>{m.createdBy || '-'}</td>

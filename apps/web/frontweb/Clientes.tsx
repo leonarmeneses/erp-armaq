@@ -42,18 +42,6 @@ function ClienteForm({ initial, onSave, onCancel }: { initial?: any, onSave: (da
   );
 }
 
-function ConfirmDialog({ message, onConfirm, onCancel }: { message: string, onConfirm: () => void, onCancel: () => void }) {
-  return (
-    <div style={{ position: 'fixed', top:0, left:0, width:'100vw', height:'100vh', background:'rgba(0,0,0,0.2)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000 }}>
-      <div style={{ background:'#fff', padding:24, borderRadius:8, minWidth:300 }}>
-        <p>{message}</p>
-        <button onClick={onConfirm}>Confirmar</button>
-        <button onClick={onCancel} style={{ marginLeft:8 }}>Cancelar</button>
-      </div>
-    </div>
-  );
-}
-
 export default function Clientes() {
   const navigate = useNavigate();
   const [clientes, setClientes] = useState<any[]>([]);
@@ -61,7 +49,6 @@ export default function Clientes() {
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editCliente, setEditCliente] = useState<any>(null);
-  const [deleteCliente, setDeleteCliente] = useState<any>(null);
 
   const fetchClientes = () => {
     setLoading(true);
@@ -80,7 +67,6 @@ export default function Clientes() {
 
   const handleAdd = () => { setEditCliente(null); setShowForm(true); };
   const handleEdit = (cliente: any) => { setEditCliente(cliente); setShowForm(true); };
-  const handleDelete = (cliente: any) => { setDeleteCliente(cliente); };
 
   const saveCliente = async (data: any) => {
     try {
@@ -108,20 +94,6 @@ export default function Clientes() {
       fetchClientes();
     } catch (e: any) {
       alert('Error al guardar cliente: ' + (e.message || e));
-    }
-  };
-
-  const confirmDelete = async () => {
-    try {
-      const res = await fetch(`/api/clients/${deleteCliente.id}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Error en la respuesta del servidor');
-      }
-      setDeleteCliente(null);
-      fetchClientes();
-    } catch (e: any) {
-      alert('Error al eliminar cliente: ' + (e.message || e));
     }
   };
 
@@ -156,7 +128,6 @@ export default function Clientes() {
               <td style={{ border: '1px solid #ccc', padding: 8 }}>{c.email}</td>
               <td style={{ border: '1px solid #ccc', padding: 8 }}>
                 <button onClick={() => handleEdit(c)} style={{ marginRight: 8 }}>Editar</button>
-                <button onClick={() => handleDelete(c)}>Eliminar</button>
               </td>
             </tr>
           ))}
@@ -164,9 +135,6 @@ export default function Clientes() {
       </table>
       {showForm && (
         <ClienteForm initial={editCliente} onSave={saveCliente} onCancel={()=>{setShowForm(false); setEditCliente(null);}} />
-      )}
-      {deleteCliente && (
-        <ConfirmDialog message={`¿Eliminar cliente ${deleteCliente.name}?`} onConfirm={confirmDelete} onCancel={()=>setDeleteCliente(null)} />
       )}
     </div>
   );

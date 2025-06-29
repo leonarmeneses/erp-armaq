@@ -64,6 +64,7 @@ export default function OrdenDeVenta() {
             <th style={{ border: '1px solid #ccc', padding: 8 }}>Total</th>
             <th style={{ border: '1px solid #ccc', padding: 8 }}>Estado</th>
             <th style={{ border: '1px solid #ccc', padding: 8 }}>Fecha</th>
+            <th style={{ border: '1px solid #ccc', padding: 8 }}>Ver</th>
           </tr>
         </thead>
         <tbody>
@@ -75,9 +76,14 @@ export default function OrdenDeVenta() {
               }</td>
               <td style={{ border: '1px solid #ccc', padding: 8 }}>{o.total}</td>
               <td style={{ border: '1px solid #ccc', padding: 8 }}>{
-                o.status === 'PENDING_SURTIDO' ? 'Pendiente de facturar' : o.status
+                o.status === 'PENDING_SURTIDO'
+                  ? (o.invoices && o.invoices.length > 0 ? 'Facturada' : 'Pendiente de facturar')
+                  : o.status
               }</td>
               <td style={{ border: '1px solid #ccc', padding: 8 }}>{o.createdAt?.slice(0,10)}</td>
+              <td style={{ border: '1px solid #ccc', padding: 8 }}>
+                <button onClick={() => setSelectedQuote(o)}>Ver</button>
+              </td>
             </tr>
           ))}
         </tbody>
@@ -88,20 +94,24 @@ export default function OrdenDeVenta() {
           onClose={() => { setShowForm(false); setSelectedQuote(null); recargarOrdenes(); }}
           selectedQuote={selectedQuote}
           setSelectedQuote={setSelectedQuote}
+          clientes={clientes}
         />
+      )}
+      {selectedQuote && !showForm && (
+        <VerOrdenVentaModal orden={selectedQuote} onClose={() => setSelectedQuote(null)} clientes={clientes} />
       )}
     </div>
   );
 }
 
-function NuevaVentaForm({ cotizaciones, onClose, selectedQuote, setSelectedQuote }: { cotizaciones: any[], onClose: () => void, selectedQuote: any, setSelectedQuote: (q: any) => void }) {
+function NuevaVentaForm({ cotizaciones, onClose, selectedQuote, setSelectedQuote, clientes }: { cotizaciones: any[], onClose: () => void, selectedQuote: any, setSelectedQuote: (q: any) => void, clientes: any[] }) {
   const [productos, setProductos] = useState<any[]>([]);
   useEffect(() => {
     fetch('/api/products')
       .then(res => res.json())
       .then(data => setProductos(data));
   }, []);
-  const cliente = selectedQuote ? (selectedQuote.client?.name || selectedQuote.clientId) : '';
+  const cliente = selectedQuote ? (selectedQuote.client?.name || clientes.find((c: any) => c.id === selectedQuote.clientId)?.name || '') : '';
   return (
     <div style={{ position: 'fixed', top:0, left:0, width:'100vw', height:'100vh', background:'rgba(0,0,0,0.2)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000 }}>
       <div style={{ background:'#fff', padding:24, borderRadius:8, minWidth:350, maxWidth:600 }}>
@@ -112,7 +122,7 @@ function NuevaVentaForm({ cotizaciones, onClose, selectedQuote, setSelectedQuote
         }} style={{ width:'100%', marginBottom:16 }}>
           <option value=''>-- Selecciona una cotización --</option>
           {cotizaciones.map(c => (
-            <option key={c.id} value={c.id}>{c.folio} - {c.client?.name || c.clientId}</option>
+            <option key={c.id} value={c.id}>{c.folio} - {c.client?.name || clientes.find((cli: any) => cli.id === c.clientId)?.name || ''}</option>
           ))}
         </select>
         {selectedQuote && (
@@ -179,9 +189,67 @@ function NuevaVentaForm({ cotizaciones, onClose, selectedQuote, setSelectedQuote
             >
               Confirmar
             </button>
-            <button onClick={onClose}>Cerrar</button>
+            {!selectedQuote && (
+              <button onClick={onClose} style={{ marginTop: 16 }}>Cerrar</button>
+            )}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function VerOrdenVentaModal({ orden, onClose, clientes }: { orden: any, onClose: () => void, clientes: any[] }) {
+  const [productos, setProductos] = useState<any[]>([]);
+  const [cotizacion, setCotizacion] = useState<any>(null);
+  useEffect(() => {
+    fetch('/api/products')
+      .then(res => res.json())
+      .then((data: any[]) => setProductos(data));
+    if (orden.quoteId) {
+      fetch(`/api/quotes/${orden.quoteId}`)
+        .then(res => res.json())
+        .then(data => setCotizacion(data));
+    }
+  }, [orden]);
+  if (!orden) return null;
+  const cliente = clientes.find(c => c.id === orden.clientId);
+  return (
+    <div style={{ position: 'fixed', top:0, left:0, width:'100vw', height:'100vh', background:'rgba(0,0,0,0.2)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000 }}>
+      <div style={{ background:'#fff', padding:24, borderRadius:8, minWidth:350, maxWidth:500 }}>
+        <h3>Detalle de Orden de Venta</h3>
+        <div><b>Folio:</b> {orden.folio}</div>
+        <div><b>Cotización:</b> {cotizacion?.folio || '-'}</div>
+        <div><b>Cliente:</b> {cliente ? cliente.name : orden.clientId}</div>
+        <div><b>Fecha:</b> {orden.createdAt?.slice(0,10)}</div>
+        <div><b>Usuario:</b> {cotizacion?.usuario || orden.usuario || '-'}</div>
+        <div><b>Productos:</b>
+          <table style={{ width:'100%', borderCollapse:'collapse', marginTop:8 }}>
+            <thead>
+              <tr>
+                <th style={{ border:'1px solid #ccc', padding:4 }}>Código</th>
+                <th style={{ border:'1px solid #ccc', padding:4 }}>Nombre</th>
+                <th style={{ border:'1px solid #ccc', padding:4 }}>Cantidad</th>
+                <th style={{ border:'1px solid #ccc', padding:4 }}>Subtotal</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(orden.items || []).map((item: any, idx: number) => {
+                const prod = productos.find((p: any) => p.id === item.productId);
+                return (
+                  <tr key={idx}>
+                    <td style={{ border:'1px solid #ccc', padding:4 }}>{prod ? prod.code : item.productId}</td>
+                    <td style={{ border:'1px solid #ccc', padding:4 }}>{prod ? prod.name : item.productId}</td>
+                    <td style={{ border:'1px solid #ccc', padding:4 }}>{item.quantity}</td>
+                    <td style={{ border:'1px solid #ccc', padding:4 }}>${item.subtotal?.toFixed(2) ?? '-'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ marginTop: 12, fontWeight: 'bold' }}>Total: ${orden.total?.toFixed(2)}</div>
+        <button onClick={onClose} style={{ marginTop: 16 }}>Cerrar</button>
       </div>
     </div>
   );

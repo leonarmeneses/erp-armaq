@@ -22,6 +22,7 @@ export default function Login() {
         setResult('');
         setLoggedIn(true);
         localStorage.setItem('usuario', name); // Guardar usuario en localStorage
+        localStorage.setItem('usuario_data', JSON.stringify(data)); // Guardar datos completos (incluye rol)
         navigate('/panel');
       } else setResult('Error: ' + (data.error || 'Login fallido'));
     } catch (err) {

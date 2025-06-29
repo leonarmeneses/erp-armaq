@@ -27,6 +27,22 @@ export const createProduct = async (req: Request, res: Response) => {
   }
 };
 
+export const updateProduct = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    // No permitir cambiar el código
+    const { code, ...data } = req.body;
+    const updated = await prisma.product.update({
+      where: { id },
+      data
+    });
+    res.json(updated);
+  } catch (error) {
+    const err = error as Error;
+    res.status(400).json({ error: err.message });
+  }
+};
+
 export const getProducts = async (req: Request, res: Response) => {
   try {
     const products = await prisma.product.findMany({ orderBy: { createdAt: 'desc' } });

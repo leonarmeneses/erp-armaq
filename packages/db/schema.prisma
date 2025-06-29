@@ -114,6 +114,8 @@ model Invoice {
   saleOrderId   String?
   saleOrder     SaleOrder?    @relation("SaleOrderInvoices", fields: [saleOrderId], references: [id])
   paymentApplications PaymentApplication[] // Relación inversa para PaymentApplication
+  pdfUrl        String?
+  xmlUrl        String?
 }
 
 model InvoiceItem {
@@ -136,6 +138,7 @@ enum InvoiceStatus {
 
 model StockMovement {
   id         String        @id @default(cuid())
+  folio      String        @unique
   productId  String
   product    Product      @relation(fields: [productId], references: [id])
   type       MovementType
@@ -179,4 +182,7 @@ model User {
   name     String   @unique
   role     String
   password String
+  sucursal String?
+  phone    String?
+  email    String?
 }

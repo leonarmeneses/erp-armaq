@@ -57,7 +57,10 @@ export const createSaleOrder = async (req: Request, res: Response) => {
 
 export const getSaleOrders = async (req: Request, res: Response) => {
   try {
-    const saleOrders = await prisma.saleOrder.findMany({ orderBy: { createdAt: 'desc' } });
+    const saleOrders = await prisma.saleOrder.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: { invoices: true },
+    });
     res.json(saleOrders);
   } catch (error) {
     const err = error as Error;

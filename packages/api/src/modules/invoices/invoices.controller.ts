@@ -1,8 +1,21 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-// import PDFKit or puppeteer for PDF generation (placeholder)
+import fs from 'fs';
+import path from 'path';
+import multer from 'multer';
 
 const prisma = new PrismaClient();
+
+const uploadDir = path.join(__dirname, '../../../uploads/invoices');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.memoryStorage();
+export const uploadInvoiceFiles = multer({ storage }).fields([
+  { name: 'pdf', maxCount: 1 },
+  { name: 'xml', maxCount: 1 }
+]);
 
 function calcularTotales(items: any[]): { subtotal: number; tax: number; total: number } {
   const subtotal = items.reduce((acc, item) => acc + (item.subtotal || 0), 0);
@@ -19,6 +32,57 @@ async function generarFolio(): Promise<string> {
 
 export const createInvoice = async (req: Request, res: Response) => {
   try {
+    if (req.headers['content-type']?.startsWith('multipart/form-data')) {
+      // Manejo de archivos PDF y XML
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+      const pdfFile = files?.pdf?.[0];
+      const xmlFile = files?.xml?.[0];
+      let pdfUrl = null;
+      let xmlUrl = null;
+      if (pdfFile) {
+        const pdfPath = path.join('uploads', 'invoices', pdfFile.originalname);
+        fs.writeFileSync(pdfPath, pdfFile.buffer);
+        pdfUrl = '/' + pdfPath;
+      }
+      if (xmlFile) {
+        const xmlPath = path.join('uploads', 'invoices', xmlFile.originalname);
+        fs.writeFileSync(xmlPath, xmlFile.buffer);
+        xmlUrl = '/' + xmlPath;
+      }
+      const data = req.body;
+      const items = JSON.parse(data.items || '[]');
+      // Calcular subtotal y tax
+      let subtotal = 0;
+      let tax = 0;
+      if (Array.isArray(items)) {
+        subtotal = items.reduce((acc, item) => acc + (item.subtotal || 0), 0);
+        tax = items.reduce((acc, item) => acc + ((item.subtotal || 0) * 0.16), 0);
+      }
+      const invoice = await prisma.invoice.create({
+        data: {
+          folio: data.folio,
+          clientId: data.clientId,
+          saleOrderId: data.saleOrderId,
+          subtotal,
+          tax,
+          total: parseFloat(data.total),
+          status: 'PAID', // Cambiar a PAID al guardar la factura
+          createdAt: new Date(data.createdAt),
+          paymentMethod: data.paymentMethod || 'EFECTIVO',
+          pdfUrl,
+          xmlUrl,
+          items: {
+            create: items.map((item: any) => ({
+              productId: item.productId,
+              quantity: item.quantity,
+              subtotal: item.subtotal,
+              price: item.price ?? item.subtotal / (item.quantity || 1) // fallback si no viene price
+            }))
+          },
+        },
+      });
+      return res.status(201).json(invoice);
+    }
     const items = req.body.items || [];
     const { subtotal, tax, total } = calcularTotales(items);
     const folio = await generarFolio();
@@ -33,7 +97,7 @@ export const createInvoice = async (req: Request, res: Response) => {
         subtotal,
         tax,
         total,
-        status: 'UNPAID',
+        status: 'PAID', // Cambiar a PAID al guardar la factura
         paymentMethod: req.body.paymentMethod,
         items: {
           create: items.map((item: any) => ({
@@ -68,7 +132,7 @@ export const createInvoice = async (req: Request, res: Response) => {
 
 export const getInvoices = async (req: Request, res: Response) => {
   try {
-    const invoices = await prisma.invoice.findMany({ include: { items: true }, orderBy: { createdAt: 'desc' } });
+    const invoices = await prisma.invoice.findMany({ include: { items: true, client: true, saleOrder: { include: { quote: true } } }, orderBy: { createdAt: 'desc' } });
     res.json(invoices);
   } catch (error) {
     const err = error as Error;
