@@ -1,17 +1,15 @@
-import React from 'react';
-/// <reference types="react" />
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-function generarCodigoCliente() {
-  // Ejemplo: CLI-20250628-XXXX
+function generarCodigoProveedor() {
+  // Ejemplo: PRO-20250628-XXXX
   const fecha = new Date();
   const yyyyMMdd = fecha.toISOString().slice(0,10).replace(/-/g,"");
   const random = Math.random().toString(36).slice(2,6).toUpperCase();
-  return `CLI-${yyyyMMdd}-${random}`;
+  return `PRO-${yyyyMMdd}-${random}`;
 }
 
-function ClienteForm({ initial, onSave, onCancel }: { initial?: any, onSave: (data: any) => void, onCancel: () => void }) {
+function ProveedorForm({ initial, onSave, onCancel }: { initial?: any, onSave: (data: any) => void, onCancel: () => void }) {
   const code = initial?.code || '';
   const [name, setName] = useState(initial?.name || '');
   const [rfc, setRfc] = useState(initial?.rfc || '');
@@ -85,6 +83,7 @@ function ClienteForm({ initial, onSave, onCancel }: { initial?: any, onSave: (da
           if(emailValido && rfcValido && telValido) {
             try {
               await onSave({
+                code: initial?.code || generarCodigoProveedor(),
                 name,
                 rfc,
                 email,
@@ -130,7 +129,7 @@ function ClienteForm({ initial, onSave, onCancel }: { initial?: any, onSave: (da
           letterSpacing: 1,
           textAlign: 'center',
           textShadow: '0 2px 8px #e0e7ff'
-        }}>{initial ? 'Editar cliente' : 'Añadir cliente'}</h3>
+        }}>{initial ? 'Editar proveedor' : 'Añadir proveedor'}</h3>
         {code && (
           <div style={{ marginBottom:16, textAlign: 'center' }}>
             <label style={{ fontWeight: 500, color: '#64748b' }}>Código:<br/>
@@ -282,44 +281,43 @@ function ClienteForm({ initial, onSave, onCancel }: { initial?: any, onSave: (da
   );
 }
 
-export default function Clientes() {
+export default function Proveedores() {
   const navigate = useNavigate();
-  const [clientes, setClientes] = useState<any[]>([]);
+  const [proveedores, setProveedores] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
-  const [editCliente, setEditCliente] = useState<any>(null);
+  const [editProveedor, setEditProveedor] = useState<any>(null);
 
-  const fetchClientes = () => {
+  const fetchProveedores = () => {
     setLoading(true);
-    fetch('/api/clients')
+    fetch('/api/providers')
       .then(res => res.json())
       .then((data) => {
-        setClientes(Array.isArray(data) ? data : data.data || []);
+        setProveedores(Array.isArray(data) ? data : data.data || []);
         setLoading(false);
       })
       .catch(() => {
-        setError('Error al cargar clientes');
+        setError('Error al cargar proveedores');
         setLoading(false);
       });
   };
-  useEffect(() => { fetchClientes(); }, []);
+  useEffect(() => { fetchProveedores(); }, []);
 
-  const handleAdd = () => { setEditCliente(null); setShowForm(true); };
-  const handleEdit = (cliente: any) => { setEditCliente(cliente); setShowForm(true); };
+  const handleAdd = () => { setEditProveedor(null); setShowForm(true); };
+  const handleEdit = (proveedor: any) => { setEditProveedor(proveedor); setShowForm(true); };
 
-  const saveCliente = async (data: any) => {
+  const saveProveedor = async (data: any) => {
     try {
       let res;
-      if (editCliente) {
-        res = await fetch(`/api/clients/${editCliente.id}`, {
+      if (editProveedor) {
+        res = await fetch(`/api/providers/${editProveedor.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data),
         });
       } else {
-        // No enviar code al crear
-        res = await fetch('/api/clients', {
+        res = await fetch('/api/providers', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data),
@@ -330,22 +328,21 @@ export default function Clientes() {
         throw new Error(err.error || 'Error en la respuesta del servidor');
       }
       setShowForm(false);
-      setEditCliente(null);
-      fetchClientes();
+      setEditProveedor(null);
+      fetchProveedores();
     } catch (e: any) {
-      alert('Error al guardar cliente: ' + (e.message || e));
+      alert('Error al guardar proveedor: ' + (e.message || e));
     }
   };
 
-  if (loading) return <div>Cargando clientes...</div>;
+  if (loading) return <div>Cargando proveedores...</div>;
   if (error) return <div>{error}</div>;
 
   return (
     <div style={{ width: '100%', minHeight: 'calc(100vh - 70px)', background: 'none', margin: 0, padding: '40px 0 0 0', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
       <div style={{ maxWidth: 900, width: '100%', margin: '0 auto', padding: 32, background: '#fff', borderRadius: 16, boxShadow: '0 4px 24px rgba(0,0,0,0.08)' }}>
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 24, gap: 16 }}>
-          <h2 style={{ margin: 0, flex: 1, color: '#1a237e', letterSpacing: 1 }}>Clientes</h2>
-          {/* Botón Añadir */}
+          <h2 style={{ margin: 0, flex: 1, color: '#1a237e', letterSpacing: 1 }}>Proveedores</h2>
           <button
             onClick={handleAdd}
             style={{
@@ -375,22 +372,22 @@ export default function Clientes() {
             </tr>
           </thead>
           <tbody>
-            {clientes.map(c => (
-              <tr key={c.id} style={{ background: '#fff', transition: 'background 0.2s', cursor: 'pointer' }}>
-                <td style={{ border: '1px solid #e3f2fd', padding: 10, display: 'none' }}>{c.id}</td>
-                <td style={{ border: '1px solid #e3f2fd', padding: 10 }}>{c.code}</td>
-                <td style={{ border: '1px solid #e3f2fd', padding: 10 }}>{c.name}</td>
-                <td style={{ border: '1px solid #e3f2fd', padding: 10 }}>{c.rfc}</td>
-                <td style={{ border: '1px solid #e3f2fd', padding: 10 }}>{c.email}</td>
+            {proveedores.map(p => (
+              <tr key={p.id} style={{ background: '#fff', transition: 'background 0.2s', cursor: 'pointer' }}>
+                <td style={{ border: '1px solid #e3f2fd', padding: 10, display: 'none' }}>{p.id}</td>
+                <td style={{ border: '1px solid #e3f2fd', padding: 10 }}>{p.code}</td>
+                <td style={{ border: '1px solid #e3f2fd', padding: 10 }}>{p.name}</td>
+                <td style={{ border: '1px solid #e3f2fd', padding: 10 }}>{p.rfc}</td>
+                <td style={{ border: '1px solid #e3f2fd', padding: 10 }}>{p.email}</td>
                 <td style={{ border: '1px solid #e3f2fd', padding: 10 }}>
-                  <button onClick={() => handleEdit(c)} style={{ marginRight: 8 }}>Editar</button>
+                  <button onClick={() => handleEdit(p)} style={{ marginRight: 8 }}>Editar</button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
         {showForm && (
-          <ClienteForm initial={editCliente} onSave={saveCliente} onCancel={()=>{setShowForm(false); setEditCliente(null);}} />
+          <ProveedorForm initial={editProveedor} onSave={saveProveedor} onCancel={()=>{setShowForm(false); setEditProveedor(null);}} />
         )}
       </div>
     </div>

@@ -39,8 +39,16 @@ export const createQuote = async (req: Request, res: Response) => {
 
 export const getQuotes = async (req: Request, res: Response) => {
   try {
+    // Obtener todas las cotizaciones
     const quotes = await prisma.quote.findMany({ orderBy: { createdAt: 'desc' } });
-    res.json(quotes);
+    // Obtener todos los usuarios (solo name y sucursal)
+    const users = await prisma.user.findMany({ select: { name: true, sucursal: true } });
+    // Enriquecer cada cotización con la sucursal del usuario creador
+    const quotesWithSucursal = quotes.map((q: any) => {
+      const user = users.find((u: any) => u.name === q.usuario);
+      return { ...q, sucursal: user?.sucursal || null };
+    });
+    res.json(quotesWithSucursal);
   } catch (error) {
     const err = error as Error;
     res.status(500).json({ error: err.message });

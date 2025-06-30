@@ -10,6 +10,8 @@ import reportsRouter from './modules/reports/reports.routes';
 import usersRouter from './modules/users/users.routes';
 import authRouter from './modules/auth/auth.routes';
 import productsRouter from './modules/products/products.routes';
+import providersRouter from './modules/providers/providers.routes';
+import path from 'path';
 
 const app = express();
 const PORT = process.env.PORT || 3010;
@@ -27,6 +29,10 @@ app.use('/api/reports', reportsRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/products', productsRouter);
+app.use('/api/providers', providersRouter);
+
+// Servir archivos estáticos de facturas y XML
+app.use('/uploads/invoices', express.static(path.join(__dirname, '../../uploads/invoices')));
 
 app.get('/', (req, res) => {
   res.send('API GestionComercialWeb funcionando');

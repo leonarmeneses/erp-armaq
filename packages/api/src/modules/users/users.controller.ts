@@ -17,6 +17,18 @@ export async function createUser(req: Request, res: Response) {
   res.status(201).json(user);
 }
 
+export async function updateUser(req: Request, res: Response) {
+  const { name, role, password, sucursal, phone, email } = req.body;
+  const id = req.params.id;
+  if (!id) return res.status(400).json({ error: 'ID inválido' });
+  let data: any = { name, role, sucursal, phone, email };
+  if (password) {
+    data.password = await bcrypt.hash(password, 10);
+  }
+  const user = await prisma.user.update({ where: { id }, data });
+  res.json(user);
+}
+
 export async function deleteUser(req: Request, res: Response) {
   const id = req.params.id;
   if (!id) return res.status(400).json({ error: 'ID inválido' });

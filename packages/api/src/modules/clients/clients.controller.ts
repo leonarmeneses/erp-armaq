@@ -18,7 +18,12 @@ export const createClient = async (req: Request, res: Response) => {
     const code = `CL-${nextNumber}`;
     // Crear el cliente con el folio generado
     const client = await prisma.client.create({
-      data: { ...req.body, code },
+      data: {
+        ...req.body,
+        code,
+        // Eliminar address si existe en req.body
+        address: undefined
+      },
     });
     res.status(201).json(client);
   } catch (error) {

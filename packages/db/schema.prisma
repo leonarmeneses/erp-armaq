@@ -17,12 +17,24 @@ model Client {
   rfc         String     @unique
   email       String?
   phone       String?
-  address     Json?
+  // Dirección desglosada
+  calle         String?
+  numExterior   String?
+  numInterior   String?
+  colonia       String?
+  municipio     String?
+  ciudad        String?
+  estado        String?
+  pais          String?
+  codigoPostal  String?
+  // address     Json? // (opcional: puedes eliminarlo si ya no lo usas)
   creditLimit Float      @default(0)
   creditDays  Int        @default(0)
   balance     Float      @default(0)
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
+  regimenFiscal String?  // Nuevo campo para régimen fiscal
+  usoCfdi       String?  // Nuevo campo para uso CFDI
 
   // Relaciones
   quotes      Quote[]
@@ -185,4 +197,27 @@ model User {
   sucursal String?
   phone    String?
   email    String?
+}
+
+model Provider {
+  id          String     @id @default(cuid())
+  code        String     @unique
+  name        String
+  rfc         String     @unique
+  email       String?
+  phone       String?
+  // Dirección desglosada
+  calle         String?
+  numExterior   String?
+  numInterior   String?
+  colonia       String?
+  municipio     String?
+  ciudad        String?
+  estado        String?
+  pais          String?
+  codigoPostal  String?
+  regimenFiscal String?
+  usoCfdi       String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
 }
