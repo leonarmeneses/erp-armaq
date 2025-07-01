@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import CotizacionDetallePDFView, { CotizacionDetalle } from './CotizacionDetallePDFView';
 
 export default function OrdenDeVenta() {
   const navigate = useNavigate();
@@ -354,42 +355,48 @@ function VerOrdenVentaModal({ orden, onClose, clientes }: { orden: any, onClose:
   }, [orden]);
   if (!orden) return null;
   const cliente = clientes.find(c => c.id === orden.clientId);
+
+  // Adaptar datos a la estructura CotizacionDetalle
+  const cotizacionDetalle: CotizacionDetalle = {
+    folio: orden.folio || '',
+    fecha: orden.createdAt?.slice(0,10) || '',
+    clienteNombre: cliente ? cliente.name : orden.clientId,
+    clienteRFC: cliente ? cliente.rfc : '',
+    clienteDireccion: cliente ? `${cliente.calle || ''} ${cliente.numExterior || ''}${cliente.numInterior ? ' Int. ' + cliente.numInterior : ''}, ${cliente.colonia || ''}, ${cliente.municipio || cliente.ciudad || ''}, ${cliente.estado || ''}, ${cliente.pais || ''}, CP ${cliente.codigoPostal || ''}`.replace(/(, )+/g, ', ').replace(/^, |, $/g, '').trim() : '',
+    clienteTelefono: cliente ? cliente.phone : '',
+    clienteEmail: cliente ? cliente.email : '',
+    vendedor: cotizacion?.usuario || orden.usuario || '-',
+    productos: (orden.items || []).map((item: any) => {
+      const prod = productos.find((p: any) => p.id === item.productId);
+      return {
+        cantidad: item.quantity,
+        descripcion: prod ? prod.name : '',
+        unidad: prod ? prod.unit : '',
+        precioUnitario: prod ? prod.price : 0,
+        importe: prod ? prod.price * item.quantity : 0,
+      };
+    }),
+    subtotal: (orden.items || []).reduce((acc: number, item: any) => {
+      const prod = productos.find((p: any) => p.id === item.productId);
+      return acc + (prod ? prod.price * item.quantity : 0);
+    }, 0),
+    iva: Math.round(((orden.items || []).reduce((acc: number, item: any) => {
+      const prod = productos.find((p: any) => p.id === item.productId);
+      return acc + (prod ? prod.price * item.quantity : 0);
+    }, 0) * 0.16) * 100) / 100,
+    total: (orden.items || []).reduce((acc: number, item: any) => {
+      const prod = productos.find((p: any) => p.id === item.productId);
+      return acc + (prod ? prod.price * item.quantity : 0);
+    }, 0) * 1.16,
+    observaciones: cotizacion?.notas || '',
+    vigencia: cotizacion?.vigencia || '15 días',
+  };
+
   return (
     <div style={{ position: 'fixed', top:0, left:0, width:'100vw', height:'100vh', background:'rgba(0,0,0,0.2)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000 }}>
-      <div style={{ background:'#fff', padding:24, borderRadius:8, minWidth:350, maxWidth:500 }}>
-        <h3>Detalle de Orden de Venta</h3>
-        <div><b>Folio:</b> {orden.folio}</div>
-        <div><b>Cotización:</b> {cotizacion?.folio || '-'}</div>
-        <div><b>Cliente:</b> {cliente ? cliente.name : orden.clientId}</div>
-        <div><b>Fecha:</b> {orden.createdAt?.slice(0,10)}</div>
-        <div><b>Usuario:</b> {cotizacion?.usuario || orden.usuario || '-'}</div>
-        <div><b>Productos:</b>
-          <table style={{ width:'100%', borderCollapse:'collapse', marginTop:8 }}>
-            <thead>
-              <tr>
-                <th style={{ border:'1px solid #ccc', padding:4 }}>Código</th>
-                <th style={{ border:'1px solid #ccc', padding:4 }}>Nombre</th>
-                <th style={{ border:'1px solid #ccc', padding:4 }}>Cantidad</th>
-                <th style={{ border:'1px solid #ccc', padding:4 }}>Subtotal</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(orden.items || []).map((item: any, idx: number) => {
-                const prod = productos.find((p: any) => p.id === item.productId);
-                return (
-                  <tr key={idx}>
-                    <td style={{ border:'1px solid #ccc', padding:4 }}>{prod ? prod.code : item.productId}</td>
-                    <td style={{ border:'1px solid #ccc', padding:4 }}>{prod ? prod.name : item.productId}</td>
-                    <td style={{ border:'1px solid #ccc', padding:4 }}>{item.quantity}</td>
-                    <td style={{ border:'1px solid #ccc', padding:4 }}>${item.subtotal?.toFixed(2) ?? '-'}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        <div style={{ marginTop: 12, fontWeight: 'bold' }}>Total: ${orden.total?.toFixed(2)}</div>
-        <button onClick={onClose} style={{ marginTop: 16 }}>Cerrar</button>
+      <div style={{ background:'none', padding:0, borderRadius:18, minWidth:400, maxWidth:800, width:'100%', boxShadow:'none', border:'none', position:'relative' }}>
+        <button onClick={onClose} style={{ position: 'absolute', top: 18, right: 18, background: '#e74c3c', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 24px', fontWeight: 600, fontSize: 16, cursor: 'pointer', boxShadow: '0 2px 8px rgba(231, 76, 60, 0.08)', zIndex: 10 }}>Cerrar</button>
+        <CotizacionDetallePDFView cotizacion={cotizacionDetalle} />
       </div>
     </div>
   );

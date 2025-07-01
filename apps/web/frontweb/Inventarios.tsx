@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -157,19 +158,15 @@ function EntradaForm({ productos, onSave, onCancel }: { productos: any[], onSave
       <form onSubmit={e => { 
         e.preventDefault();
         // Transformar productosSeleccionados: cantidad -> quantity (number)
-        const productosTransformados = productosSeleccionados.map(item => ({
-          productId: item.productId,
-          quantity: Number(item.cantidad)
-        }));
-        // Solo enviar el primer producto seleccionado (ajustar para el backend actual)
-        const producto = productosTransformados[0];
-        if (!producto || !producto.productId || !producto.quantity) {
+        const productosTransformados = productosSeleccionados
+          .filter(item => item.productId && item.cantidad)
+          .map(item => ({ productId: item.productId, quantity: Number(item.cantidad) }));
+        if (productosTransformados.length === 0) {
           alert('Selecciona al menos un producto y cantidad válida');
           return;
         }
         onSave({
-          productId: producto.productId,
-          quantity: producto.quantity,
+          productos: productosTransformados,
           type: tipo,
           createdAt: fecha,
           createdBy: usuario,
@@ -308,12 +305,25 @@ export default function Inventarios() {
   const navigate = useNavigate();
   const [movimientos, setMovimientos] = useState<any[]>([]);
   const [productos, setProductos] = useState<any[]>([]);
+  const [productosAll, setProductosAll] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editProducto, setEditProducto] = useState<any>(null);
   const [deleteProducto, setDeleteProducto] = useState<any>(null);
   const [showEntrada, setShowEntrada] = useState(false);
+  const [search, setSearch] = useState('');
+  const [searchMov, setSearchMov] = useState('');
+  const [movimientoSeleccionado, setMovimientoSeleccionado] = useState<any>(null);
+  const [proveedores, setProveedores] = useState<any[]>([]);
+  const [detalleEntrada, setDetalleEntrada] = useState<any[]>([]);
+  const [loadingDetalle, setLoadingDetalle] = useState(false);
+  const movimientosFiltrados = movimientos.filter(m =>
+    (m.folio || m.id).toLowerCase().includes(searchMov.toLowerCase()) ||
+    (m.product?.name || '').toLowerCase().includes(searchMov.toLowerCase()) ||
+    (m.productId || '').toLowerCase().includes(searchMov.toLowerCase()) ||
+    (m.createdBy || '').toLowerCase().includes(searchMov.toLowerCase())
+  );
 
   // Obtener el rol del usuario
   const rol = (() => {
@@ -329,7 +339,21 @@ export default function Inventarios() {
     fetch('/api/stockmovements')
       .then(res => res.json())
       .then(data => {
-        setMovimientos(data);
+        setMovimientos(data.map((m: any) => {
+          let resumenProductos = '';
+          let cantidadTotal = 0;
+          if (Array.isArray(m.productos)) {
+            resumenProductos = m.productos.map((p: any) => {
+              const prod = productosAll.find((prod: any) => prod.id === p.productId);
+              return prod ? prod.name : p.productId;
+            }).join(', ');
+            cantidadTotal = m.productos.reduce((acc: number, p: any) => acc + (p.quantity || 0), 0);
+          } else {
+            resumenProductos = m.product?.name || m.productId || '';
+            cantidadTotal = m.quantity || 0;
+          }
+          return { ...m, resumenProductos, cantidadTotal };
+        }));
         setLoading(false);
       })
       .catch(() => {
@@ -344,6 +368,18 @@ export default function Inventarios() {
       .catch(() => setProductos([]));
   };
   useEffect(() => { fetchMovimientos(); fetchProductos(); }, []);
+
+  useEffect(() => {
+    fetch('/api/providers')
+      .then(res => res.json())
+      .then(data => setProveedores(Array.isArray(data) ? data : []));
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/products')
+      .then(res => res.json())
+      .then(data => setProductosAll(Array.isArray(data) ? data : []));
+  }, []);
 
   const handleAdd = () => setShowForm(true);
   const handleEdit = (producto: any) => { setEditProducto(producto); setShowForm(true); };
@@ -394,10 +430,12 @@ export default function Inventarios() {
   };
   const saveEntrada = async (data: any) => {
     try {
+      // Si es un solo producto (compatibilidad), convertir a array
+      const body = data.productos ? data : { ...data, productos: [{ productId: data.productId, quantity: data.quantity }] };
       const res = await fetch('/api/stockmovements', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data), // Usar el tipo seleccionado en el formulario
+        body: JSON.stringify(body),
       });
       let result;
       const contentType = res.headers.get('content-type');
@@ -418,6 +456,24 @@ export default function Inventarios() {
     }
   };
 
+  useEffect(() => {
+    if (movimientoSeleccionado && movimientoSeleccionado.folioCompra) {
+      setLoadingDetalle(true);
+      fetch(`/api/stockmovements/entrada?folioCompra=${encodeURIComponent(movimientoSeleccionado.folioCompra)}`)
+        .then(res => res.json())
+        .then(data => setDetalleEntrada(Array.isArray(data) ? data : []))
+        .catch(() => setDetalleEntrada([]))
+        .finally(() => setLoadingDetalle(false));
+    } else {
+      setDetalleEntrada([]);
+    }
+  }, [movimientoSeleccionado]);
+
+  const productosFiltrados = productos.filter(p =>
+    p.code.toLowerCase().includes(search.toLowerCase()) ||
+    p.name.toLowerCase().includes(search.toLowerCase())
+  );
+
   if (loading) return <div>Cargando inventarios...</div>;
   if (error) return <div>{error}</div>;
 
@@ -431,6 +487,13 @@ export default function Inventarios() {
           <div style={{ flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8, gap: 16 }}>
               <h3 style={{ margin: 0 }}>Lista de productos</h3>
+              <input
+                type="text"
+                placeholder="Buscar por código o nombre..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                style={{ borderRadius: 8, border: '1.5px solid #90caf9', padding: '7px 14px', fontSize: 15, minWidth: 180 }}
+              />
               {rol !== 'VENTAS' && rol !== 'ENCARGADO' && (
                 <button
                   onClick={handleAdd}
@@ -464,7 +527,7 @@ export default function Inventarios() {
                 </tr>
               </thead>
               <tbody>
-                {productos.map(p => (
+                {productosFiltrados.map(p => (
                   <tr key={p.id} style={{ background: '#fff', transition: 'background 0.2s', cursor: 'pointer' }}>
                     <td style={{ border: '1px solid #e3f2fd', padding: 10 }}>{p.code}</td>
                     <td style={{ border: '1px solid #e3f2fd', padding: 10 }}>{p.name}</td>
@@ -482,56 +545,70 @@ export default function Inventarios() {
               </tbody>
             </table>
           </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8, gap: 16 }}>
-              <h3 style={{ margin: 0 }}>Movimientos</h3>
-              {rol !== 'VENTAS' && (
-                <button
-                  onClick={handleEntrada}
-                  style={{
-                    background: 'linear-gradient(90deg, #1976d2 0%, #64b5f6 100%)',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: 8,
-                    padding: '8px 20px',
-                    fontWeight: 600,
-                    fontSize: 16,
-                    cursor: 'pointer',
-                    boxShadow: '0 2px 8px rgba(25, 118, 210, 0.08)',
-                    marginLeft: 8
-                  }}
-                >
-                  Añadir movimiento
-                </button>
-              )}
-            </div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fafbfc', borderRadius: 8, overflow: 'hidden', boxShadow: '0 2px 8px #e0e7ef' }}>
-              <thead>
-                <tr style={{ background: '#e3f2fd' }}>
-                  <th style={{ border: '1px solid #bbdefb', padding: 10, color: '#1976d2' }}>ID</th>
-                  <th style={{ border: '1px solid #bbdefb', padding: 10, color: '#1976d2' }}>Producto</th>
-                  <th style={{ border: '1px solid #bbdefb', padding: 10, color: '#1976d2' }}>Tipo</th>
-                  <th style={{ border: '1px solid #bbdefb', padding: 10, color: '#1976d2' }}>Cantidad</th>
-                  <th style={{ border: '1px solid #bbdefb', padding: 10, color: '#1976d2' }}>Fecha</th>
-                  <th style={{ border: '1px solid #bbdefb', padding: 10, color: '#1976d2' }}>Usuario</th>
-                </tr>
-              </thead>
-              <tbody>
-                {movimientos.map(m => (
-                  <tr key={m.id} style={{ background: '#fff', transition: 'background 0.2s', cursor: 'pointer' }}>
-                    <td style={{ border: '1px solid #e3f2fd', padding: 10 }}>{m.folio || m.id}</td>
-                    <td style={{ border: '1px solid #e3f2fd', padding: 10 }}>{m.product?.name || m.productId}</td>
-                    <td style={{ border: '1px solid #e3f2fd', padding: 10 }}>
-                      {m.type === 'IN' ? 'Entrada' : m.type === 'OUT' ? 'Salida' : m.type === 'ADJUSTMENT' ? 'Ajuste' : m.type}
-                    </td>
-                    <td style={{ border: '1px solid #e3f2fd', padding: 10 }}>{m.quantity}</td>
-                    <td style={{ border: '1px solid #e3f2fd', padding: 10 }}>{m.createdAt?.slice(0,10)}</td>
-                    <td style={{ border: '1px solid #e3f2fd', padding: 10 }}>{m.createdBy || '-'}</td>
+          {/* Solo mostrar la sección de movimientos si el rol NO es VENDEDOR ni VENTAS */}
+          {rol !== 'VENDEDOR' && rol !== 'VENTAS' && (
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8, gap: 16 }}>
+                <h3 style={{ margin: 0 }}>Movimientos</h3>
+                <input
+                  type="text"
+                  placeholder="Buscar por folio, producto o usuario..."
+                  value={searchMov}
+                  onChange={e => setSearchMov(e.target.value)}
+                  style={{ borderRadius: 8, border: '1.5px solid #90caf9', padding: '7px 14px', fontSize: 15, minWidth: 180, marginLeft: 16 }}
+                />
+                {rol !== 'VENTAS' && (
+                  <button
+                    onClick={handleEntrada}
+                    style={{
+                      background: 'linear-gradient(90deg, #1976d2 0%, #64b5f6 100%)',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 8,
+                      padding: '8px 20px',
+                      fontWeight: 600,
+                      fontSize: 16,
+                      cursor: 'pointer',
+                      boxShadow: '0 2px 8px rgba(25, 118, 210, 0.08)',
+                      marginLeft: 8
+                    }}
+                  >
+                    Añadir movimiento
+                  </button>
+                )}
+              </div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fafbfc', borderRadius: 8, overflow: 'hidden', boxShadow: '0 2px 8px #e0e7ef' }}>
+                <thead>
+                  <tr style={{ background: '#e3f2fd' }}>
+                    <th style={{ border: '1px solid #bbdefb', padding: 10, color: '#1976d2' }}>ID</th>
+                    <th style={{ border: '1px solid #bbdefb', padding: 10, color: '#1976d2' }}>Tipo</th>
+                    <th style={{ border: '1px solid #bbdefb', padding: 10, color: '#1976d2' }}>Cantidad</th>
+                    <th style={{ border: '1px solid #bbdefb', padding: 10, color: '#1976d2' }}>Fecha</th>
+                    <th style={{ border: '1px solid #bbdefb', padding: 10, color: '#1976d2' }}>Usuario</th>
+                    <th style={{ border: '1px solid #bbdefb', padding: 10, color: '#1976d2' }}>Sucursal</th>
+                    <th style={{ border: '1px solid #bbdefb', padding: 10, color: '#1976d2' }}>Acciones</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {movimientosFiltrados.map(m => (
+                    <tr key={m.id} style={{ background: '#fff', transition: 'background 0.2s', cursor: 'pointer' }}>
+                      <td style={{ border: '1px solid #e3f2fd', padding: 10 }}>{m.folio || m.id}</td>
+                      <td style={{ border: '1px solid #e3f2fd', padding: 10 }}>
+                        {m.type === 'IN' ? 'Entrada' : m.type === 'OUT' ? 'Salida' : m.type === 'ADJUSTMENT' ? 'Ajuste' : m.type}
+                      </td>
+                      <td style={{ border: '1px solid #e3f2fd', padding: 10 }}>{m.cantidadTotal}</td>
+                      <td style={{ border: '1px solid #e3f2fd', padding: 10 }}>{m.createdAt?.slice(0,10)}</td>
+                      <td style={{ border: '1px solid #e3f2fd', padding: 10 }}>{m.createdBy || '-'}</td>
+                      <td style={{ border: '1px solid #e3f2fd', padding: 10 }}>{m.sucursal || '-'}</td>
+                      <td style={{ border: '1px solid #e3f2fd', padding: 10 }}>
+                        <button onClick={() => setMovimientoSeleccionado(m)} style={{ background:'#1976d2', color:'#fff', border:'none', borderRadius:6, padding:'6px 14px', fontWeight:600, cursor:'pointer' }}>Ver</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
         {showForm && (
           <ProductoForm initial={editProducto} onSave={saveProducto} onCancel={()=>{setShowForm(false); setEditProducto(null);}} />
@@ -542,6 +619,78 @@ export default function Inventarios() {
         {showEntrada && (
           <EntradaForm productos={productos} onSave={saveEntrada} onCancel={()=>setShowEntrada(false)} />
         )}
+        {movimientoSeleccionado && (
+          <DetalleMovimientoModal
+            movimiento={movimientoSeleccionado}
+            productosAll={productosAll}
+            proveedores={proveedores}
+            onClose={() => setMovimientoSeleccionado(null)}
+            detalleEntrada={detalleEntrada}
+            loadingDetalle={loadingDetalle}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Modal de detalle agrupado fuera del componente principal
+function DetalleMovimientoModal({ movimiento, productosAll, proveedores, onClose, detalleEntrada, loadingDetalle }: any) {
+  // Mostrar productos desde movimiento.productos si existe, si no, usar detalleEntrada
+  const productosMostrar = Array.isArray(movimiento.productos) && movimiento.productos.length > 0
+    ? movimiento.productos
+    : (Array.isArray(detalleEntrada) ? detalleEntrada : []);
+  return (
+    <div style={{ position:'fixed', top:0, left:0, width:'100vw', height:'100vh', background:'rgba(30,40,80,0.18)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000 }}>
+      <div style={{ background:'linear-gradient(135deg, #f5f7fa 0%, #e3e9f7 100%)', borderRadius:20, padding:36, minWidth:600, maxWidth:900, width:'100%', boxShadow:'0 8px 32px rgba(60,80,180,0.18)', border:'1.5px solid #dbeafe', position:'relative' }}>
+        <h3 style={{ textAlign:'center', color:'#2563eb', fontWeight:700, marginBottom:24, letterSpacing:1, textShadow:'0 2px 8px #e0e7ff' }}>Detalle de entrada</h3>
+        <div style={{ display:'flex', gap:32 }}>
+          <div style={{ flex:1, minWidth:220 }}>
+            <div style={{ marginBottom:14 }}><b>Usuario:</b><br/>{movimiento.createdBy || '-'}</div>
+            <div style={{ marginBottom:14 }}><b>Fecha:</b><br/>{movimiento.createdAt?.slice(0,10)}</div>
+            <div style={{ marginBottom:14 }}><b>Proveedor:</b><br/>{
+              movimiento.proveedorId
+                ? (proveedores.find(p => p.id === movimiento.proveedorId)?.name || movimiento.proveedorId)
+                : '-'
+            }</div>
+            <div style={{ marginBottom:14 }}><b>Sucursal:</b><br/>{movimiento.sucursal || '-'}</div>
+            <div style={{ marginBottom:14 }}><b>Tipo de movimiento:</b><br/>{movimiento.type === 'IN' ? 'Entrada' : movimiento.type === 'OUT' ? 'Salida' : movimiento.type === 'ADJUSTMENT' ? 'Ajuste' : movimiento.type}</div>
+            <div style={{ marginBottom:14 }}><b>Folio de compra:</b><br/>{movimiento.folioCompra || '-'}</div>
+            <div style={{ marginBottom:14 }}><b>Motivo:</b><br/>{movimiento.reason || '-'}</div>
+            <div style={{ marginBottom:14 }}><b>Costo:</b><br/>{movimiento.cost ?? '-'}</div>
+          </div>
+          <div style={{ flex:2 }}>
+            <div style={{ marginBottom:14, fontWeight:500, color:'#64748b' }}>Productos y cantidades:</div>
+            {loadingDetalle ? (
+              <div>Cargando productos...</div>
+            ) : (
+              <table style={{ width:'100%', borderCollapse:'collapse', background:'#f8fafc', borderRadius:8, boxShadow:'0 2px 8px #e0e7ef', marginBottom:12 }}>
+                <thead>
+                  <tr style={{ background:'#e3f2fd' }}>
+                    <th style={{ border:'1px solid #bbdefb', padding:'8px 10px', color:'#1976d2', fontWeight:600 }}>Producto</th>
+                    <th style={{ border:'1px solid #bbdefb', padding:'8px 10px', color:'#1976d2', fontWeight:600 }}>Cantidad</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {productosMostrar.length > 0 ? productosMostrar.map((item: any, idx: number) => {
+                    const nombreProducto = productosAll.find((p: any) => p.id === item.productId)?.name || item.productId;
+                    return (
+                      <tr key={idx} style={{ background:'#fff', transition:'background 0.2s' }}>
+                        <td style={{ border:'1px solid #e3f2fd', padding:'8px 10px' }}>{nombreProducto}</td>
+                        <td style={{ border:'1px solid #e3f2fd', padding:'8px 10px' }}>{item.quantity ?? '-'}</td>
+                      </tr>
+                    );
+                  }) : (
+                    <tr><td colSpan={2}>No hay productos registrados en esta entrada.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+        <div style={{ display:'flex', justifyContent:'flex-end', gap:12, marginTop:24 }}>
+          <button onClick={onClose} style={{ background:'#e74c3c', color:'#fff', border:'none', borderRadius:8, padding:'10px 28px', fontWeight:600, fontSize:16, cursor:'pointer' }}>Cerrar</button>
+        </div>
       </div>
     </div>
   );

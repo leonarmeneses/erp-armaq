@@ -9,5 +9,7 @@ router.get('/', stockMovementsController.getStockMovements);
 router.post('/adjustment', stockMovementsController.createAdjustment);
 // Crear cualquier tipo de movimiento (IN, OUT, ADJUSTMENT)
 router.post('/', stockMovementsController.createMovement);
+// Obtener movimientos agrupados por entrada
+router.get('/entrada', stockMovementsController.getMovementsByEntrada);
 
 export default router;

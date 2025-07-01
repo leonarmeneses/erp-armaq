@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import CotizacionDetallePDFView, { CotizacionDetalle } from './CotizacionDetallePDFView';
 
 export default function Cotizaciones() {
   const navigate = useNavigate();
@@ -357,58 +358,47 @@ function VerCotizacionModal({ cotizacion, onClose, clientes }: { cotizacion: any
   }, []);
   if (!cotizacion) return null;
   const cliente = clientes.find(c => c.id === cotizacion.clientId);
-  // Calcular total real sumando los productos
-  const totalCalculado = (cotizacion.items || []).reduce((acc: number, item: { productId: string; quantity: number }) => {
-    const prod = productos.find((p: any) => p.id === item.productId);
-    return acc + (prod ? prod.price * item.quantity : 0);
-  }, 0);
+
+  // Adaptar datos a la estructura CotizacionDetalle
+  const cotizacionDetalle: CotizacionDetalle = {
+    folio: cotizacion.folio || '',
+    fecha: cotizacion.createdAt?.slice(0,10) || '',
+    clienteNombre: cliente ? cliente.name : cotizacion.clientId,
+    clienteRFC: cliente ? cliente.rfc : '',
+    clienteDireccion: cliente ? `${cliente.calle || ''} ${cliente.numExterior || ''}${cliente.numInterior ? ' Int. ' + cliente.numInterior : ''}, ${cliente.colonia || ''}, ${cliente.municipio || cliente.ciudad || ''}, ${cliente.estado || ''}, ${cliente.pais || ''}, CP ${cliente.codigoPostal || ''}`.replace(/(, )+/g, ', ').replace(/^, |, $/g, '').trim() : '',
+    clienteTelefono: cliente ? cliente.phone : '',
+    clienteEmail: cliente ? cliente.email : '',
+    vendedor: cotizacion.usuario || cotizacion.vendedor || '-',
+    productos: (cotizacion.items || []).map((item: { productId: string; quantity: number }) => {
+      const prod = productos.find((p: any) => p.id === item.productId);
+      return {
+        cantidad: item.quantity,
+        descripcion: prod ? prod.name : '',
+        unidad: prod ? prod.unit : '',
+        precioUnitario: prod ? prod.price : 0,
+        importe: prod ? prod.price * item.quantity : 0,
+      };
+    }),
+    subtotal: (cotizacion.items || []).reduce((acc: number, item: { productId: string; quantity: number }) => {
+      const prod = productos.find((p: any) => p.id === item.productId);
+      return acc + (prod ? prod.price * item.quantity : 0);
+    }, 0),
+    iva: Math.round(((cotizacion.items || []).reduce((acc: number, item: { productId: string; quantity: number }) => {
+      const prod = productos.find((p: any) => p.id === item.productId);
+      return acc + (prod ? prod.price * item.quantity : 0);
+    }, 0) * 0.16) * 100) / 100, // IVA 16% redondeado a 2 decimales
+    total: (cotizacion.items || []).reduce((acc: number, item: { productId: string; quantity: number }) => {
+      const prod = productos.find((p: any) => p.id === item.productId);
+      return acc + (prod ? prod.price * item.quantity : 0);
+    }, 0) * 1.16,
+    observaciones: cotizacion.notas,
+    vigencia: cotizacion.vigencia || '15 días',
+  };
+
   return (
     <div style={{ position: 'fixed', top:0, left:0, width:'100vw', height:'100vh', background:'rgba(30,40,80,0.18)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000 }}>
-      <div style={{ background:'linear-gradient(135deg, #f5f7fa 0%, #e3e9f7 100%)', padding:32, borderRadius:18, minWidth:400, maxWidth:800, width:'100%', boxShadow:'0 8px 32px rgba(60,80,180,0.18)', border:'1.5px solid #dbeafe', position:'relative', transition:'box-shadow 0.2s' }}>
-        <h3 style={{
-          margin: 0,
-          marginBottom: 18,
-          fontSize: 24,
-          fontWeight: 700,
-          color: '#2563eb',
-          letterSpacing: 1,
-          textAlign: 'center',
-          textShadow: '0 2px 8px #e0e7ff'
-        }}>Detalle de Cotización</h3>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:'20px 28px', marginBottom: 18 }}>
-          <div><b style={{ color:'#1976d2' }}>Folio:</b> {cotizacion.folio}</div>
-          <div><b style={{ color:'#1976d2' }}>Cliente:</b> {cliente ? cliente.name : cotizacion.clientId}</div>
-          <div><b style={{ color:'#1976d2' }}>Fecha:</b> {cotizacion.createdAt?.slice(0,10)}</div>
-        </div>
-        <div style={{ marginBottom:16 }}><b style={{ color:'#1976d2' }}>Vendedor:</b> {cotizacion.usuario}</div>
-        <div style={{ marginBottom:18 }}>
-          <b style={{ color:'#1976d2' }}>Productos:</b>
-          <table style={{ width:'100%', borderCollapse:'collapse', marginTop:8, background:'#fff', borderRadius:8, boxShadow:'0 2px 8px #e0e7ef' }}>
-            <thead>
-              <tr style={{ background:'#e3f2fd' }}>
-                <th style={{ border:'1px solid #c7d2fe', padding:6, color:'#1976d2' }}>Código</th>
-                <th style={{ border:'1px solid #c7d2fe', padding:6, color:'#1976d2' }}>Nombre</th>
-                <th style={{ border:'1px solid #c7d2fe', padding:6, color:'#1976d2' }}>Cantidad</th>
-                <th style={{ border:'1px solid #c7d2fe', padding:6, color:'#1976d2' }}>Costo</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(cotizacion.items || []).map((item: { productId: string; quantity: number }, idx: number) => {
-                const prod = productos.find((p: any) => p.id === item.productId);
-                return (
-                  <tr key={idx} style={{ background: idx % 2 === 0 ? '#f8fafc' : '#fff' }}>
-                    <td style={{ border:'1px solid #e3f2fd', padding:6 }}>{prod ? prod.code : ''}</td>
-                    <td style={{ border:'1px solid #e3f2fd', padding:6 }}>{prod ? prod.name : ''}</td>
-                    <td style={{ border:'1px solid #e3f2fd', padding:6 }}>{item.quantity}</td>
-                    <td style={{ border:'1px solid #e3f2fd', padding:6 }}>${prod ? prod.price.toFixed(2) : '-'}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        <div style={{ marginBottom:16 }}><b style={{ color:'#1976d2' }}>Notas:</b> {cotizacion.notas}</div>
-        <div style={{ marginTop: 12, fontWeight: 'bold', textAlign:'right', fontSize:18, color:'#1976d2' }}>Total: ${totalCalculado.toFixed(2)}</div>
+      <div style={{ background:'none', padding:0, borderRadius:18, minWidth:400, maxWidth:800, width:'100%', boxShadow:'none', border:'none', position:'relative' }}>
+        <CotizacionDetallePDFView cotizacion={cotizacionDetalle} />
         <div style={{ display:'flex', justifyContent:'flex-end', marginTop: 18 }}>
           <button onClick={onClose} style={{ background: '#e74c3c', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 24px', fontWeight: 600, fontSize: 16, cursor: 'pointer', boxShadow: '0 2px 8px rgba(231, 76, 60, 0.08)' }}>Cerrar</button>
         </div>

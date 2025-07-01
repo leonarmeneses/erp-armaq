@@ -59,7 +59,6 @@ model Product {
 
   // Relaciones
   invoiceItems    InvoiceItem[]
-  stockMovements  StockMovement[]
 }
 
 enum ProductType {
@@ -151,16 +150,17 @@ enum InvoiceStatus {
 model StockMovement {
   id         String        @id @default(cuid())
   folio      String        @unique
-  productId  String
-  product    Product      @relation(fields: [productId], references: [id])
   type       MovementType
-  quantity   Float
   reason     String?
   cost       Float
   createdAt  DateTime     @default(now())
   createdBy  String?      // Usuario que registró la entrada
   relatedInvoiceId String?
   relatedPurchaseId String?
+  proveedorId String?     // Nuevo: proveedor relacionado
+  sucursal   String?      // Nuevo: sucursal del movimiento
+  folioCompra String?     // Nuevo: folio de compra
+  productos  Json?        // Ahora opcional para migración
 }
 
 enum MovementType {

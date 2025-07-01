@@ -5,12 +5,9 @@ const prisma = new PrismaClient();
 
 export const getStockMovements = async (req: Request, res: Response) => {
   try {
-    const { productId } = req.query;
-    const where = productId ? { productId: String(productId) } : {};
+    // Ya no hay filtro por productId
     const movements = await prisma.stockMovement.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      include: { product: true },
+      orderBy: { createdAt: 'desc' }
     });
     res.json(movements);
   } catch (error) {
@@ -21,7 +18,7 @@ export const getStockMovements = async (req: Request, res: Response) => {
 
 export const createAdjustment = async (req: Request, res: Response) => {
   try {
-    const { productId, quantity, reason, cost, createdBy, createdAt } = req.body;
+    const { productos, reason, cost, createdBy, createdAt } = req.body;
     // Generar folio consecutivo
     const last = await prisma.stockMovement.findFirst({
       orderBy: { createdAt: 'desc' },
@@ -34,8 +31,7 @@ export const createAdjustment = async (req: Request, res: Response) => {
     }
     const movement = await prisma.stockMovement.create({
       data: {
-        productId,
-        quantity,
+        productos,
         reason,
         cost,
         type: 'ADJUSTMENT',
@@ -44,11 +40,16 @@ export const createAdjustment = async (req: Request, res: Response) => {
         folio: nextFolio,
       },
     });
-    // Actualizar stock del producto
-    await prisma.product.update({
-      where: { id: productId },
-      data: { stock: { increment: quantity } },
-    });
+    // Actualizar stock de todos los productos
+    if (Array.isArray(productos)) {
+      for (const item of productos) {
+        if (!item.productId || !item.quantity) continue;
+        await prisma.product.update({
+          where: { id: item.productId },
+          data: { stock: { increment: item.quantity } },
+        });
+      }
+    }
     res.status(201).json(movement);
   } catch (error) {
     const err = error as Error;
@@ -58,65 +59,74 @@ export const createAdjustment = async (req: Request, res: Response) => {
 
 export const createMovement = async (req: Request, res: Response) => {
   try {
-    const { productId, quantity, reason, cost, createdBy, createdAt, type } = req.body;
-    // Validar tipo
+    const { productos, reason, cost, createdBy, createdAt, type, proveedorId, sucursal, folioCompra } = req.body;
+    if (!Array.isArray(productos) || productos.length === 0) {
+      return res.status(400).json({ error: 'Debes enviar al menos un producto' });
+    }
     if (!['IN', 'OUT', 'ADJUSTMENT'].includes(type)) {
       return res.status(400).json({ error: 'Tipo de movimiento inválido' });
     }
-    // Generar folio consecutivo robusto basado en el mayor número existente
-    let nextFolio = '';
-    let movement;
-    let intentos = 0;
-    while (intentos < 5) {
-      // Buscar el mayor número de folio existente
-      const allFolios = await prisma.stockMovement.findMany({
-        select: { folio: true },
-      });
-      let maxNum = 0;
-      for (const f of allFolios) {
-        if (f.folio && /^MVO-\d+$/.test(f.folio)) {
-          const num = parseInt(f.folio.replace('MVO-', ''));
-          if (!isNaN(num) && num > maxNum) maxNum = num;
-        }
-      }
-      nextFolio = `MVO-${maxNum + 1}`;
-      try {
-        movement = await prisma.stockMovement.create({
-          data: {
-            productId,
-            quantity,
-            reason,
-            cost: typeof cost === 'number' ? cost : 0,
-            type,
-            createdBy,
-            createdAt: createdAt ? new Date(createdAt) : undefined,
-            folio: nextFolio,
-          },
-        });
-        break; // Éxito
-      } catch (e: any) {
-        if (e.code === 'P2002' && e.meta?.target?.includes('folio')) {
-          // Folio duplicado, reintentar
-          intentos++;
-          continue;
-        } else {
-          throw e;
-        }
+    // Generar folio único para la entrada
+    let allFolios = await prisma.stockMovement.findMany({ select: { folio: true } });
+    let maxNum = 0;
+    for (const f of allFolios) {
+      if (f.folio && /^MVO-\d+$/.test(f.folio)) {
+        const num = parseInt(f.folio.replace('MVO-', ''));
+        if (!isNaN(num) && num > maxNum) maxNum = num;
       }
     }
-    if (!movement) throw new Error('No se pudo generar un folio único para el movimiento');
-    // Log para depuración
-    console.log('Actualizando stock:', { type, quantity, increment: type === 'OUT' ? -quantity : quantity });
-    // Actualizar stock del producto
-    await prisma.product.update({
-      where: { id: productId },
-      data: { stock: { increment: type === 'OUT' ? -quantity : quantity } },
+    const folio = `MVO-${maxNum + 1}`;
+    // Crear un solo movimiento con todos los productos
+    const movimiento = await prisma.stockMovement.create({
+      data: {
+        productos,
+        reason,
+        cost: typeof cost === 'number' ? cost : 0,
+        type,
+        createdBy,
+        createdAt: createdAt ? new Date(createdAt) : undefined,
+        folio,
+        ...(proveedorId ? { proveedorId } : {}),
+        ...(sucursal ? { sucursal } : {}),
+        ...(folioCompra ? { folioCompra } : {}),
+      },
     });
-    res.status(201).json(movement);
+    // Actualizar stock de todos los productos
+    for (const item of productos) {
+      if (!item.productId || !item.quantity) continue;
+      await prisma.product.update({
+        where: { id: item.productId },
+        data: { stock: { increment: type === 'OUT' ? -item.quantity : item.quantity } },
+      });
+    }
+    res.status(201).json(movimiento);
   } catch (error) {
     const err = error as Error;
     if (!res.headersSent) {
       res.status(400).json({ error: err.message || 'Error inesperado' });
     }
+  }
+};
+
+// Nuevo endpoint para obtener todos los movimientos de una entrada agrupada
+export const getMovementsByEntrada = async (req: Request, res: Response) => {
+  try {
+    const { folioCompra, createdAt, proveedorId, sucursal } = req.query;
+    let where: any = {};
+    if (folioCompra) where.folioCompra = String(folioCompra);
+    if (createdAt) where.createdAt = new Date(String(createdAt));
+    if (proveedorId) where.proveedorId = String(proveedorId);
+    if (sucursal) where.sucursal = String(sucursal);
+    if (Object.keys(where).length === 0) {
+      return res.status(400).json({ error: 'Debes enviar al menos un parámetro de búsqueda' });
+    }
+    const movimientos = await prisma.stockMovement.findMany({
+      where,
+      orderBy: { createdAt: 'asc' }
+    });
+    res.json(movimientos);
+  } catch (error) {
+    const err = error as Error;
+    res.status(500).json({ error: err.message });
   }
 };

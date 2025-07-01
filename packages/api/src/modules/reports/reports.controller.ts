@@ -98,8 +98,13 @@ export const kardex = async (req: Request, res: Response) => {
   try {
     const { productId } = req.query;
     if (!productId) return res.status(400).json({ error: 'productId requerido' });
+    // Buscar movimientos donde productos JSON contenga el productId
     const result = await prisma.stockMovement.findMany({
-      where: { productId: String(productId) },
+      where: {
+        productos: {
+          array_contains: [{ productId: String(productId) }]
+        }
+      },
       orderBy: { createdAt: 'asc' },
     });
     res.json(result);
